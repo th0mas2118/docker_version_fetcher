@@ -254,20 +254,35 @@ class DockerHubClient:
         try:
             # Utiliser packaging.version si disponible (meilleure gestion des versions sémantiques)
             if HAS_PACKAGING:
-                # Supprimer le 'v' au début si présent
-                v1 = version1[1:] if version1.startswith('v') else version1
-                v2 = version2[1:] if version2.startswith('v') else version2
-                
-                # Comparer avec packaging.version
-                parsed_v1 = version.parse(v1)
-                parsed_v2 = version.parse(v2)
-                
-                if parsed_v1 > parsed_v2:
-                    return 1
-                elif parsed_v1 < parsed_v2:
-                    return -1
-                else:
+                try:
+                    # Extraire la partie principale de la version (avant les tirets)
+                    # Par exemple, pour "2.29.0-alpine", on prend "2.29.0"
+                    v1_main = version1.split('-')[0] if '-' in version1 else version1
+                    v2_main = version2.split('-')[0] if '-' in version2 else version2
+                    
+                    # Supprimer le 'v' au début si présent
+                    v1_main = v1_main[1:] if v1_main.startswith('v') else v1_main
+                    v2_main = v2_main[1:] if v2_main.startswith('v') else v2_main
+                    
+                    # Comparer avec packaging.version
+                    parsed_v1 = version.parse(v1_main)
+                    parsed_v2 = version.parse(v2_main)
+                    
+                    if parsed_v1 > parsed_v2:
+                        return 1
+                    elif parsed_v1 < parsed_v2:
+                        return -1
+                    
+                    # Si les versions principales sont égales, comparer les suffixes
+                    if '-' in version1 and '-' not in version2:
+                        return -1  # La version sans suffixe est considérée comme plus récente
+                    elif '-' not in version1 and '-' in version2:
+                        return 1   # La version sans suffixe est considérée comme plus récente
+                    
                     return 0
+                except Exception as e:
+                    logger.debug(f"Erreur lors de la comparaison avec packaging.version: {str(e)}. Utilisation de la méthode de secours.")
+                    # En cas d'erreur, on utilise la méthode de secours ci-dessous
             
             # Méthode de secours si packaging n'est pas disponible
             # Gérer les versions avec des parties non numériques
