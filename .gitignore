@@ -1,0 +1,44 @@
+# Fichiers d'environnement
+.env
+
+# Fichiers de données
+data/
+
+# Fichiers Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Fichiers de logs
+*.log
+logs/
+
+# Fichiers de configuration spécifiques à l'utilisateur
+config/gotify.json
+
+# Environnements virtuels
+venv/
+ENV/
+
+# Fichiers d'IDE
+.idea/
+.vscode/
+*.swp
+*.swo
