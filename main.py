@@ -53,6 +53,16 @@ def main():
         # Pour chaque image locale, vérifier les mises à jour
         updates_available = []
         for image in local_images:
+            # Ignorer l'image du projet elle-même
+            if "docker_version_fetcher" in image['repository']:
+                logger.info(f"Image du projet ignorée: {image['repository']}:{image['tag']}")
+                continue
+                
+            # Ignorer les mises à jour pour les tags 'latest'
+            if image['tag'] == 'latest':
+                logger.info(f"Tag 'latest' ignoré pour les mises à jour: {image['repository']}:{image['tag']}")
+                continue
+                
             logger.info(f"Vérification des mises à jour pour {image['repository']}:{image['tag']}")
             latest_version = hub_client.get_latest_version(image['repository'], image['tag'])
             

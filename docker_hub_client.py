@@ -122,24 +122,37 @@ class DockerHubClient:
             # Par exemple, si tag='1.21', trouver la dernière version '1.21.x'
             base_tag_prefix = tag.split('.')[0]
             
-            latest_version = None
-            latest_tag = None
+            # Filtrer les versions Windows
+            windows_keywords = ['windows', 'nanoserver', 'windowsltsc', 'windowsservercore']
+            filtered_versions = []
+            for v in data.get('results', []):
+                version_tag = v.get('name', '')
+                is_windows = any(keyword in version_tag.lower() for keyword in windows_keywords)
+                if not is_windows:
+                    filtered_versions.append(v)
             
-            for result in data.get('results', []):
-                current_tag = result.get('name')
+            # Si toutes les versions sont des versions Windows, utiliser les versions non filtrées
+            if not filtered_versions and data.get('results', []):
+                logger.warning(f"Toutes les versions de {repository} sont des versions Windows")
+                filtered_versions = data.get('results', [])
+            
+            # Trouver la version la plus récente
+            latest_tag = tag
+            latest_version = None
+            
+            for version_info in filtered_versions:
+                version_tag = version_info.get('name')
                 
-                # Si on cherche exactement 'latest' ou une correspondance exacte
-                if tag == 'latest' and current_tag == 'latest':
-                    latest_tag = current_tag
-                    latest_version = result
+                # Si le tag est exactement le même, utiliser celui-ci
+                if version_tag == tag:
+                    latest_tag = version_tag
+                    latest_version = version_info
                     break
                 
-                # Si on cherche une version spécifique (ex: '1.21')
-                elif current_tag.startswith(base_tag_prefix + '.'):
-                    # Prendre la version la plus récente dans la même branche
-                    if not latest_tag or self._compare_versions(current_tag, latest_tag) > 0:
-                        latest_tag = current_tag
-                        latest_version = result
+                # Sinon, comparer les versions
+                if self._compare_versions(version_tag, latest_tag) > 0:
+                    latest_tag = version_tag
+                    latest_version = version_info
             
             # Si aucune version correspondante n'est trouvée, vérifier la dernière version globale
             if not latest_version and tag != 'latest':

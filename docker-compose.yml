@@ -5,8 +5,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${DATA_PATH:-/root/docker_fetcher_data}:/app/data
-      - ./patches:/app/patches
-      - ./entrypoint.sh:/app/entrypoint.sh
     environment:
       - GOTIFY_URL=${GOTIFY_URL}
       - GOTIFY_TOKEN=${GOTIFY_TOKEN}
@@ -15,5 +13,4 @@ services:
       - CHECK_INTERVAL=${CHECK_INTERVAL:-86400}
       - NOTIFICATION_FREQUENCY=${NOTIFICATION_FREQUENCY:-7}
     restart: unless-stopped
-    entrypoint: ["/bin/sh", "/app/entrypoint.sh"]
     command: python run_periodic.py --daemon
