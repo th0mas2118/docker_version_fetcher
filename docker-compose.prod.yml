@@ -1,0 +1,26 @@
+services:
+  docker-version-fetcher:
+    image: ${IMAGE_VERSION:-ghcr.io/username/docker-version-fetcher:latest}
+    container_name: docker-version-fetcher
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - GOTIFY_URL=${GOTIFY_URL}
+      - GOTIFY_TOKEN=${GOTIFY_TOKEN}
+      - GOTIFY_PRIORITY=${GOTIFY_PRIORITY:-5}
+      - GOTIFY_TITLE=${GOTIFY_TITLE:-Docker Version Fetcher}
+      - CHECK_INTERVAL=${CHECK_INTERVAL:-0 0 */24 * * *}
+      - NOTIFICATION_FREQUENCY=${NOTIFICATION_FREQUENCY:-4}
+    networks:
+      - default
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    driver: bridge

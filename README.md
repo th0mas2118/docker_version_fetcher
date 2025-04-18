@@ -14,48 +14,67 @@ Un outil pour surveiller les mises à jour des images Docker et envoyer des noti
 
 ### Prérequis
 
-- Python 3.8+
-- Docker
+- [Bun](https://bun.sh/) 1.0+ (pour le développement local)
+- Docker (pour l'exécution en conteneur)
 - Serveur Gotify (pour les notifications)
 
-### Installation manuelle
+### Installation manuelle pour le développement
 
 1. Clonez ce dépôt
-2. Installez les dépendances : `pip install -r requirements.txt`
-3. Configurez Gotify dans `config/gotify.json`
-4. Exécutez l'application : `python main.py`
+2. Installez Bun si ce n'est pas déjà fait :
+   ```bash
+   curl -fsSL https://bun.sh/install | bash
+   ```
+3. Installez les dépendances :
+   ```bash
+   bun install
+   ```
+4. Créez un fichier `.env` basé sur `.env.example`
+5. Exécutez l'application en mode développement :
+   ```bash
+   bun dev
+   ```
 
 ### Installation avec Docker
 
 1. Construisez l'image Docker :
-   ```
+   ```bash
    docker build -t docker-version-fetcher .
    ```
 
 2. Exécutez le conteneur :
-   ```
+   ```bash
    docker run -d \
      --name docker-version-fetcher \
-     -v /var/run/docker.sock:/var/run/docker.sock \
+     -v /var/run/docker.sock:/var/run/docker.sock:ro \
      -v $(pwd)/data:/app/data \
      --env-file .env \
      docker-version-fetcher
    ```
    
    Ou en spécifiant directement les variables d'environnement :
-   ```
+   ```bash
    docker run -d \
      --name docker-version-fetcher \
-     -v /var/run/docker.sock:/var/run/docker.sock \
+     -v /var/run/docker.sock:/var/run/docker.sock:ro \
      -v $(pwd)/data:/app/data \
      -e GOTIFY_URL=https://votre-serveur-gotify.com \
      -e GOTIFY_TOKEN=VOTRE_TOKEN_GOTIFY \
      -e GOTIFY_PRIORITY=5 \
      -e GOTIFY_TITLE="Docker Version Fetcher" \
-     -e CHECK_INTERVAL=24 \
+     -e CHECK_INTERVAL="0 0 */24 * * *" \
      -e NOTIFICATION_FREQUENCY=7 \
      docker-version-fetcher
    ```
+
+### Utilisation avec Docker Compose
+
+Un fichier `docker-compose.yml` est fourni pour faciliter le déploiement :
+
+```bash
+# Créez d'abord un fichier .env avec vos variables
+docker-compose up -d
+```
 
 ## Configuration
 
@@ -71,30 +90,46 @@ GOTIFY_PRIORITY=5
 GOTIFY_TITLE=Docker Version Fetcher
 
 # Configuration de l'application
-CHECK_INTERVAL=24  # Heures entre les vérifications
+CHECK_INTERVAL="0 0 */24 * * *"  # Expression cron pour les vérifications (ici toutes les 24h)
 NOTIFICATION_FREQUENCY=7  # Jours entre les rappels pour la même mise à jour
 ```
 
 **Note**: Le fichier `.env` n'est pas versionné pour des raisons de sécurité. Un fichier `.env.example` est fourni comme modèle.
 
-## Exécution périodique
+## Développement
 
-Pour exécuter l'application périodiquement, vous pouvez utiliser cron ou le script `run_periodic.py` inclus.
+### Commandes disponibles
 
-### Avec cron
+```bash
+# Démarrer l'application en mode développement (avec rechargement automatique)
+bun dev
 
-Ajoutez la ligne suivante à votre crontab pour exécuter l'application tous les jours à 9h :
+# Démarrer l'application
+bun start
+
+# Exécuter les tests
+bun test
+
+# Analyser le code avec ESLint
+bun lint
+
+# Construire l'application pour la production
+bun run build
+```
+
+### Structure du projet
 
 ```
-0 9 * * * cd /chemin/vers/docker_version_fetcher && python main.py
-```
-
-### Avec le script périodique
-
-Exécutez le script `run_periodic.py` avec l'intervalle souhaité :
-
-```
-python run_periodic.py --interval 24
+├── src/                # Code source
+│   ├── config/         # Configuration
+│   ├── services/       # Services (Docker, notifications, etc.)
+│   ├── utils/          # Utilitaires
+│   └── index.js        # Point d'entrée
+├── dist/               # Code compilé (généré par bun build)
+├── data/               # Données persistantes
+├── .env.example        # Exemple de variables d'environnement
+├── Dockerfile          # Configuration Docker
+└── docker-compose.yml  # Configuration Docker Compose
 ```
 
 ## Licence

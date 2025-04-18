@@ -1,0 +1,18 @@
+FROM oven/bun:1
+
+WORKDIR /app
+
+# Copier les fichiers de dépendances
+COPY package*.json ./
+
+# Installer les dépendances
+RUN bun install
+
+# Les fichiers source seront montés en volume
+# Pas besoin de copier le code source
+
+# Exposer le port si nécessaire
+# EXPOSE 3000
+
+# Commande par défaut (sera remplacée par docker-compose)
+CMD ["bun", "--watch", "src/index.js"]
