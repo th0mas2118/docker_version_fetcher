@@ -44,6 +44,42 @@ class DockerHubClient:
         
         self.last_request_time = time.time()
     
+    def repository_exists(self, repository):
+        """
+        Vérifie si un repository existe sur Docker Hub.
+        
+        Args:
+            repository (str): Nom du repository (ex: 'nginx')
+            
+        Returns:
+            bool: True si le repository existe, False sinon
+        """
+        try:
+            # Déterminer si c'est une image officielle ou un repository utilisateur
+            if '/' not in repository:
+                # Image officielle
+                repo_path = f"library/{repository}"
+            else:
+                # Repository utilisateur
+                repo_path = repository
+            
+            # Appliquer la limitation de taux
+            self._rate_limit_request()
+            
+            # Construire l'URL
+            url = f"{self.api_url}/repositories/{quote_plus(repo_path)}"
+            
+            # Faire la requête
+            logger.debug(f"Vérification de l'existence du repository: {url}")
+            response = self.session.get(url)
+            
+            # Si le code de statut est 200, le repository existe
+            return response.status_code == 200
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de la vérification de l'existence du repository {repository}: {str(e)}")
+            return False
+    
     def get_latest_version(self, repository, tag):
         """
         Récupère la dernière version disponible pour une image Docker.
@@ -56,6 +92,11 @@ class DockerHubClient:
             dict: Informations sur la dernière version disponible
         """
         try:
+            # Vérifier si le repository existe
+            if not self.repository_exists(repository):
+                logger.warning(f"Le repository {repository} n'existe pas sur Docker Hub ou est privé")
+                return None
+            
             # Déterminer si c'est une image officielle ou un repository utilisateur
             if '/' not in repository:
                 # Image officielle
@@ -146,18 +187,54 @@ class DockerHubClient:
         Returns:
             int: 1 si version1 > version2, -1 si version1 < version2, 0 si égales
         """
-        v1_parts = version1.split('.')
-        v2_parts = version2.split('.')
-        
-        # Comparer chaque partie de la version
-        for i in range(max(len(v1_parts), len(v2_parts))):
-            # Si une version n'a pas assez de parties, considérer 0
-            v1 = int(v1_parts[i]) if i < len(v1_parts) else 0
-            v2 = int(v2_parts[i]) if i < len(v2_parts) else 0
+        try:
+            # Gérer les versions avec des parties non numériques
+            # D'abord, essayer de comparer les versions sémantiques standard (x.y.z)
+            v1_parts = version1.split('.')
+            v2_parts = version2.split('.')
             
-            if v1 > v2:
+            # Comparer chaque partie de la version
+            for i in range(min(len(v1_parts), len(v2_parts))):
+                # Essayer de convertir en entier si possible
+                try:
+                    # Extraire la partie numérique au début de la chaîne
+                    v1_numeric = ''.join([c for c in v1_parts[i] if c.isdigit()])
+                    v2_numeric = ''.join([c for c in v2_parts[i] if c.isdigit()])
+                    
+                    # Si les deux parties sont numériques, comparer en tant qu'entiers
+                    if v1_numeric and v2_numeric:
+                        v1 = int(v1_numeric)
+                        v2 = int(v2_numeric)
+                        
+                        if v1 > v2:
+                            return 1
+                        elif v1 < v2:
+                            return -1
+                    else:
+                        # Si l'une des parties n'est pas numérique, comparer lexicographiquement
+                        if v1_parts[i] > v2_parts[i]:
+                            return 1
+                        elif v1_parts[i] < v2_parts[i]:
+                            return -1
+                except (ValueError, TypeError):
+                    # Si la conversion échoue, comparer lexicographiquement
+                    if v1_parts[i] > v2_parts[i]:
+                        return 1
+                    elif v1_parts[i] < v2_parts[i]:
+                        return -1
+            
+            # Si toutes les parties communes sont égales, la version avec plus de parties est considérée comme plus récente
+            if len(v1_parts) > len(v2_parts):
                 return 1
-            elif v1 < v2:
+            elif len(v1_parts) < len(v2_parts):
                 return -1
-        
-        return 0
+            
+            return 0
+        except Exception as e:
+            logger.warning(f"Erreur lors de la comparaison des versions {version1} et {version2}: {str(e)}")
+            # En cas d'erreur, comparer lexicographiquement
+            if version1 > version2:
+                return 1
+            elif version1 < version2:
+                return -1
+            return 0

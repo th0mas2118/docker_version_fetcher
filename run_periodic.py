@@ -31,8 +31,10 @@ def parse_arguments():
     default_interval = int(os.getenv('CHECK_INTERVAL', '24'))
     
     parser = argparse.ArgumentParser(description='Exécute Docker Version Fetcher périodiquement')
-    parser.add_argument('--interval', type=int, default=default_interval,
-                        help=f'Intervalle en heures entre les exécutions (défaut: {default_interval})')
+    # parser.add_argument('--interval', type=int, default=default_interval,
+    #                     help=f'Intervalle en heures entre les exécutions (défaut: {default_interval})')
+    parser.add_argument('--seconds', type=int, default=None,
+                        help='Intervalle en secondes entre les exécutions (prioritaire sur --interval)')
     parser.add_argument('--daemon', action='store_true',
                         help='Exécuter en arrière-plan comme un daemon')
     return parser.parse_args()
@@ -68,10 +70,18 @@ def main():
     args = parse_arguments()
     
     # Convertir l'intervalle en secondes
-    interval_seconds = args.interval * 3600
+    if args.seconds is not None:
+        interval_seconds = args.seconds
+        logger.info(f"Utilisation de l'intervalle en secondes: {interval_seconds} secondes")
+    else:
+        interval_seconds = args.interval * 3600
+        logger.info(f"Utilisation de l'intervalle en heures: {args.interval} heures ({interval_seconds} secondes)")
     
     if args.daemon:
-        logger.info(f"Démarrage en mode daemon avec un intervalle de {args.interval} heures")
+        if args.seconds is not None:
+            logger.info(f"Démarrage en mode daemon avec un intervalle de {args.seconds} secondes")
+        else:
+            logger.info(f"Démarrage en mode daemon avec un intervalle de {args.interval} heures")
         
         while True:
             success = run_main_script()
