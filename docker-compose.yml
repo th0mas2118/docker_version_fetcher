@@ -1,6 +1,6 @@
 services:
   docker-version-fetcher:
-    build: .
+    image: ghcr.io/th0mas2118/docker_version_fetcher:${IMAGE_VERSION:-latest}
     container_name: docker-version-checker
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
