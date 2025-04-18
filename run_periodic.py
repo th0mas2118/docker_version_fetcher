@@ -33,6 +33,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Exécute Docker Version Fetcher périodiquement')
     parser.add_argument('--interval', type=int, default=default_interval,
                         help=f'Intervalle en heures entre les exécutions (défaut: {default_interval})')
+    parser.add_argument('--seconds', type=int, default=None,
+                        help='Intervalle en secondes entre les exécutions (prioritaire sur --interval)')
     parser.add_argument('--daemon', action='store_true',
                         help='Exécuter en arrière-plan comme un daemon')
     return parser.parse_args()
