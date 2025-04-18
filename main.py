@@ -81,71 +81,82 @@ def main():
                 repo_versions[image['repository']] = []
             repo_versions[image['repository']].append(image)
         
-        # Pour chaque repository, trouver la version la plus récente disponible
+        # Pour chaque repository, trouver la version la plus récente disponible sur Docker Hub
         updates_available = []
         for repo, images in repo_versions.items():
-            # Trouver la version la plus récente disponible pour ce repository
-            latest_available = None
-            for image in images:
-                logger.info(f"Vérification des mises à jour pour {image['repository']}:{image['tag']}")
-                version_info = hub_client.get_latest_version(image['repository'], image['tag'])
-                
-                if version_info:
-                    if not latest_available or hub_client._compare_versions(version_info['tag'], latest_available['tag']) > 0:
-                        latest_available = version_info
+            # Vérifier les mises à jour pour chaque image
+            logger.info(f"Recherche de la dernière version disponible pour {repo}")
             
-            if not latest_available:
+            # Obtenir la dernière version disponible pour ce repository
+            # Nous utilisons la première image pour obtenir les informations de base
+            latest_version_info = hub_client.get_latest_version(repo, "latest")
+            
+            if not latest_version_info:
+                logger.warning(f"Impossible de trouver la dernière version pour {repo}")
                 continue
                 
+            latest_tag = latest_version_info['tag']
+            latest_digest = latest_version_info['digest']
+            
+            logger.info(f"Dernière version disponible pour {repo}: {latest_tag}")
+            
+            # Mettre à jour l'état du repository avec la dernière version disponible
+            # Cela garantit que le repository a toujours la dernière version, même si aucune image locale n'est mise à jour
+            state_manager.update_repository_state(state, repo, latest_digest, latest_tag)
+            
             # Vérifier chaque image locale par rapport à la version la plus récente
             for image in images:
                 # Si la version locale est inférieure à la version la plus récente
-                if hub_client._compare_versions(image['tag'], latest_available['tag']) < 0:
-                    logger.info(f"Version inférieure détectée: {image['repository']}:{image['tag']} -> {latest_available['tag']}")
+                if hub_client._compare_versions(image['tag'], latest_tag) < 0:
+                    logger.info(f"Version inférieure détectée: {image['repository']}:{image['tag']} -> {latest_tag}")
                     
                     # Vérifier si nous avons déjà notifié cette mise à jour
                     image_key = f"{image['repository']}:{image['tag']}"
-                    should_notify = state_manager.should_notify(state, image_key, latest_available['digest'])
+                    should_notify = state_manager.should_notify(state, image_key, latest_digest)
                     
                     if should_notify:
                         updates_available.append({
                             'repository': image['repository'],
                             'current_tag': image['tag'],
-                            'latest_tag': latest_available['tag'],
+                            'latest_tag': latest_tag,
                             'current_digest': image['digest'],
-                            'latest_digest': latest_available['digest']
+                            'latest_digest': latest_digest,
+                            'container_name': image.get('container_name', '')
                         })
                         
-                        # Mettre à jour l'état
-                        state_manager.update_image_state(
+                        # Mettre à jour l'état du tag spécifique
+                        state_manager.update_tag_state(
                             state, 
-                            image_key, 
-                            latest_available['digest'], 
-                            latest_available['tag']
+                            image['repository'],
+                            image['tag'],
+                            latest_digest, 
+                            latest_tag
                         )
                 # Si la version locale est égale à la version la plus récente mais le digest est différent
-                elif image['tag'] == latest_available['tag'] and image['digest'] != latest_available['digest']:
+                elif image['tag'] == latest_tag and image['digest'] != latest_digest:
                     logger.info(f"Même version mais digest différent: {image['repository']}:{image['tag']}")
                     
                     # Vérifier si nous avons déjà notifié cette mise à jour
                     image_key = f"{image['repository']}:{image['tag']}"
-                    should_notify = state_manager.should_notify(state, image_key, latest_available['digest'])
+                    should_notify = state_manager.should_notify(state, image_key, latest_digest)
                     
                     if should_notify:
                         updates_available.append({
                             'repository': image['repository'],
                             'current_tag': image['tag'],
-                            'latest_tag': latest_available['tag'],
+                            'latest_tag': latest_tag,
                             'current_digest': image['digest'],
-                            'latest_digest': latest_available['digest']
+                            'latest_digest': latest_digest,
+                            'container_name': image.get('container_name', '')
                         })
                         
-                        # Mettre à jour l'état
-                        state_manager.update_image_state(
+                        # Mettre à jour l'état du tag spécifique
+                        state_manager.update_tag_state(
                             state, 
-                            image_key, 
-                            latest_available['digest'], 
-                            latest_available['tag']
+                            image['repository'],
+                            image['tag'],
+                            latest_digest, 
+                            latest_tag
                         )
         
         # Envoyer les notifications

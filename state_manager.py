@@ -114,32 +114,31 @@ class StateManager:
         
         repo_state = state['images'][repository]
         
-        # Si le digest a changé depuis la dernière notification
-        if repo_state.get('latest_digest') != latest_digest:
-            logger.info(f"Nouvelle version détectée pour {repository}, notification requise")
+        # Vérifier si ce tag spécifique a déjà été notifié
+        current_tags = repo_state.get('current_tags', {})
+        if tag in current_tags and current_tags[tag].get('notified', False):
+            # Vérifier la date de dernière notification pour ce tag
+            tag_last_notified = datetime.fromisoformat(current_tags[tag].get('last_notified', '2000-01-01T00:00:00'))
+            notification_frequency = state['settings'].get('notification_frequency', self.notification_frequency)
+            
+            # Calculer la date du prochain rappel
+            next_reminder = tag_last_notified + timedelta(days=notification_frequency)
+            
+            # Si la date du prochain rappel est passée, on doit notifier
+            if datetime.now() >= next_reminder:
+                logger.info(f"Rappel pour {image_key}, dernière notification le {tag_last_notified.isoformat()}")
+                return True
+            else:
+                logger.info(f"Pas de notification requise pour {image_key} (déjà notifié récemment)")
+                return False
+        
+        # Si le tag n'a jamais été notifié, on doit notifier
+        if tag not in current_tags:
+            logger.info(f"Nouveau tag {tag} pour {repository}, notification requise")
             return True
         
-        # Si une notification a déjà été envoyée, vérifier si un rappel est nécessaire
+        # Si le repository a été notifié récemment, vérifier la fréquence
         if repo_state.get('notified', False):
-            # Vérifier si ce tag spécifique a déjà été notifié
-            current_tags = repo_state.get('current_tags', {})
-            if tag in current_tags and current_tags[tag].get('notified', False):
-                # Vérifier la date de dernière notification pour ce tag
-                tag_last_notified = datetime.fromisoformat(current_tags[tag].get('last_notified', '2000-01-01T00:00:00'))
-                notification_frequency = state['settings'].get('notification_frequency', self.notification_frequency)
-                
-                # Calculer la date du prochain rappel
-                next_reminder = tag_last_notified + timedelta(days=notification_frequency)
-                
-                # Si la date du prochain rappel est passée, on doit notifier
-                if datetime.now() >= next_reminder:
-                    logger.info(f"Rappel pour {image_key}, dernière notification le {tag_last_notified.isoformat()}")
-                    return True
-                else:
-                    logger.info(f"Pas de notification requise pour {image_key} (déjà notifié)")
-                    return False
-            
-            # Vérifier la date de dernière notification pour le repository
             repo_last_notified = datetime.fromisoformat(repo_state.get('last_notified', '2000-01-01T00:00:00'))
             notification_frequency = state['settings'].get('notification_frequency', self.notification_frequency)
             
@@ -154,24 +153,21 @@ class StateManager:
         logger.info(f"Pas de notification requise pour {image_key}")
         return False
     
-    def update_image_state(self, state, image_key, latest_digest, latest_tag):
+    def update_repository_state(self, state, repository, latest_digest, latest_tag):
         """
-        Met à jour l'état d'une image après notification.
+        Met à jour l'état d'un repository avec la dernière version disponible.
         
         Args:
             state (dict): État actuel
-            image_key (str): Clé de l'image (repository:tag)
+            repository (str): Nom du repository
             latest_digest (str): Digest de la dernière version disponible
             latest_tag (str): Tag de la dernière version disponible
         """
-        # Extraire le repository à partir de image_key
-        repository = image_key.split(':')[0] if ':' in image_key else image_key
-        
         # Initialiser l'état du repository si nécessaire
         if repository not in state['images']:
             state['images'][repository] = {}
         
-        # Mettre à jour l'état
+        # Mettre à jour l'état du repository
         state['images'][repository].update({
             'latest_digest': latest_digest,
             'latest_tag': latest_tag,
@@ -180,14 +176,52 @@ class StateManager:
             'last_notified': datetime.now().isoformat()
         })
         
-        # Stocker l'information sur le tag spécifique
-        if ':' in image_key:
-            tag = image_key.split(':')[1]
-            if 'current_tags' not in state['images'][repository]:
-                state['images'][repository]['current_tags'] = {}
-            state['images'][repository]['current_tags'][tag] = {
-                'notified': True,
-                'last_notified': datetime.now().isoformat()
-            }
+        logger.info(f"État du repository mis à jour: {repository} -> {latest_tag}")
+    
+    def update_tag_state(self, state, repository, tag, latest_digest, latest_tag):
+        """
+        Met à jour l'état d'un tag spécifique après notification.
         
-        logger.info(f"État mis à jour pour le repository {repository}")
+        Args:
+            state (dict): État actuel
+            repository (str): Nom du repository
+            tag (str): Tag de l'image
+            latest_digest (str): Digest de la dernière version disponible
+            latest_tag (str): Tag de la dernière version disponible
+        """
+        # Initialiser l'état du repository si nécessaire
+        if repository not in state['images']:
+            state['images'][repository] = {}
+        
+        # Initialiser la structure des tags si nécessaire
+        if 'current_tags' not in state['images'][repository]:
+            state['images'][repository]['current_tags'] = {}
+        
+        # Mettre à jour l'état du tag spécifique
+        state['images'][repository]['current_tags'][tag] = {
+            'notified': True,
+            'last_notified': datetime.now().isoformat(),
+            'latest_tag': latest_tag
+        }
+        
+        logger.info(f"État du tag mis à jour: {repository}:{tag} -> {latest_tag}")
+    
+    def update_image_state(self, state, image_key, latest_digest, latest_tag):
+        """
+        Met à jour l'état d'une image après notification (méthode de compatibilité).
+        
+        Args:
+            state (dict): État actuel
+            image_key (str): Clé de l'image (repository:tag)
+            latest_digest (str): Digest de la dernière version disponible
+            latest_tag (str): Tag de la dernière version disponible
+        """
+        # Extraire le repository et le tag à partir de image_key
+        if ':' in image_key:
+            repository, tag = image_key.split(':', 1)
+            self.update_repository_state(state, repository, latest_digest, latest_tag)
+            self.update_tag_state(state, repository, tag, latest_digest, latest_tag)
+        else:
+            self.update_repository_state(state, image_key, latest_digest, latest_tag)
+        
+        logger.info(f"État mis à jour pour {image_key}")
