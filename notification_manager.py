@@ -161,7 +161,8 @@ class NotificationManager:
                 
                 # Ajouter le nom du conteneur si disponible
                 containers = [update.get('container_name', '') for update in repo_updates_list if 'container_name' in update]
-                if containers and all(containers):
+                containers = [c for c in containers if c]  # Filtrer les valeurs vides
+                if containers:
                     message += f"  • Conteneurs concernés: {', '.join(containers)}\n"
                 
                 message += "\n"

@@ -91,112 +91,146 @@ class DockerHubClient:
     
     def get_latest_version(self, repository, tag):
         """
-        Récupère la dernière version disponible pour une image Docker.
+        Récupère la dernière version d'une image sur Docker Hub.
         
         Args:
-            repository (str): Nom du repository (ex: 'nginx')
-            tag (str): Tag de l'image (ex: '1.21')
+            repository (str): Nom du repository (ex: "library/ubuntu")
+            tag (str): Tag de l'image (ex: "20.04")
             
         Returns:
-            dict: Informations sur la dernière version disponible
+            dict: Informations sur la dernière version ou None si non trouvée
         """
+        # Vérifier si le repository existe
+        if not self.repository_exists(repository):
+            logger.warning(f"Le repository {repository} n'existe pas sur Docker Hub ou est privé")
+            return None
+        
         try:
-            # Vérifier si le repository existe
-            if not self.repository_exists(repository):
-                logger.warning(f"Le repository {repository} n'existe pas sur Docker Hub ou est privé")
-                return None
-            
-            # Déterminer si c'est une image officielle ou un repository utilisateur
+            # Construire l'URL pour l'API Docker Hub
             if '/' not in repository:
-                # Image officielle
-                repo_path = f"library/{repository}"
+                # Pour les images officielles, ajouter le préfixe "library/"
+                api_repository = f"library/{repository}"
             else:
-                # Repository utilisateur
-                repo_path = repository
+                api_repository = repository
             
-            # Appliquer la limitation de taux
-            self._rate_limit_request()
+            # Récupérer les tags disponibles
+            url = f"https://hub.docker.com/v2/repositories/{api_repository}/tags"
             
-            # Construire l'URL
-            url = f"{self.api_url}/repositories/{quote_plus(repo_path)}/tags"
-            
-            # Faire la requête
-            logger.debug(f"Requête vers Docker Hub: {url}")
-            response = self.session.get(url)
+            response = requests.get(url)
             response.raise_for_status()
             
             data = response.json()
             
-            # Trouver la dernière version correspondant au tag de base
-            # Par exemple, si tag='1.21', trouver la dernière version '1.21.x'
-            base_tag_prefix = tag.split('.')[0]
+            if 'results' not in data or not data['results']:
+                logger.warning(f"Aucun tag trouvé pour {repository}")
+                return None
             
-            # Filtrer les versions Windows
-            windows_keywords = ['windows', 'nanoserver', 'windowsltsc', 'windowsservercore']
-            filtered_versions = []
-            for v in data.get('results', []):
-                version_tag = v.get('name', '')
-                is_windows = any(keyword in version_tag.lower() for keyword in windows_keywords)
-                if not is_windows:
-                    filtered_versions.append(v)
+            # Filtrer les tags pour exclure les versions Windows
+            filtered_tags = []
+            for tag_info in data['results']:
+                tag_name = tag_info.get('name', '')
+                if not self._is_windows_version(tag_name) and self.is_valid_version(tag_name):
+                    filtered_tags.append(tag_info)
             
-            # Si toutes les versions sont des versions Windows, utiliser les versions non filtrées
-            if not filtered_versions and data.get('results', []):
-                logger.warning(f"Toutes les versions de {repository} sont des versions Windows")
-                filtered_versions = data.get('results', [])
+            if not filtered_tags:
+                logger.warning(f"Aucun tag valide non-Windows trouvé pour {repository}")
+                # Essayer sans le filtre de validation si aucun tag valide n'est trouvé
+                filtered_tags = [tag_info for tag_info in data['results'] 
+                                 if not self._is_windows_version(tag_info.get('name', ''))]
+                if not filtered_tags:
+                    return None
             
-            # Trouver la version la plus récente
-            latest_tag = tag
-            latest_version = None
+            # Extraire les versions numériques et les trier
+            version_tags = []
+            for tag_info in filtered_tags:
+                tag_name = tag_info.get('name', '')
+                if tag_name != 'latest':
+                    version_tags.append((tag_name, tag_info))
             
-            for version_info in filtered_versions:
-                version_tag = version_info.get('name')
+            # Trier les versions par ordre décroissant
+            sorted_versions = sorted(version_tags, 
+                                     key=lambda x: self._parse_version_for_sorting(x[0]), 
+                                     reverse=True)
+            
+            # Si aucune version numérique n'est trouvée, utiliser le premier tag disponible
+            if not sorted_versions:
+                logger.warning(f"Aucune version numérique trouvée pour {repository}, utilisation du premier tag disponible")
+                latest_tag = filtered_tags[0]
+            else:
+                # Prendre la version la plus récente
+                latest_tag = sorted_versions[0][1]
+            
+            # Extraire les informations nécessaires
+            tag_name = latest_tag.get('name', tag)
+            
+            # Récupérer le digest
+            digest = None
+            if 'images' in latest_tag and latest_tag['images']:
+                for image in latest_tag['images']:
+                    if image.get('architecture') == 'amd64' and image.get('os') == 'linux':
+                        digest = image.get('digest')
+                        break
                 
-                # Si le tag est exactement le même, utiliser celui-ci
-                if version_tag == tag:
-                    latest_tag = version_tag
-                    latest_version = version_info
-                    break
-                
-                # Sinon, comparer les versions
-                if self._compare_versions(version_tag, latest_tag) > 0:
-                    latest_tag = version_tag
-                    latest_version = version_info
+                if not digest and latest_tag['images']:
+                    # Si aucune image amd64/linux n'est trouvée, prendre la première
+                    digest = latest_tag['images'][0].get('digest')
             
-            # Si aucune version correspondante n'est trouvée, vérifier la dernière version globale
-            if not latest_version and tag != 'latest':
-                logger.info(f"Aucune version correspondant à {tag} trouvée, vérification de 'latest'")
-                return self.get_latest_version(repository, 'latest')
+            if not digest:
+                logger.warning(f"Impossible de récupérer le digest pour {repository}:{tag_name}")
+                digest = f"sha256:{tag_name}"  # Fallback pour avoir quelque chose
             
-            if latest_version:
-                # Extraire le digest
-                digest = None
-                if 'images' in latest_version and latest_version['images']:
-                    for image in latest_version['images']:
-                        if image.get('architecture') == 'amd64':  # Architecture la plus courante
-                            digest = image.get('digest')
-                            break
-                    
-                    # Si aucun digest amd64 n'est trouvé, prendre le premier disponible
-                    if not digest and latest_version['images']:
-                        digest = latest_version['images'][0].get('digest')
-                
-                return {
-                    'repository': repository,
-                    'tag': latest_tag,
-                    'digest': digest,
-                    'last_updated': latest_version.get('last_updated')
-                }
+            logger.info(f"Version la plus récente trouvée pour {repository}: {tag_name}")
             
-            logger.warning(f"Aucune version trouvée pour {repository}:{tag}")
-            return None
+            return {
+                'tag': tag_name,
+                'digest': digest
+            }
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"Erreur lors de la requête vers Docker Hub: {str(e)}")
+            logger.error(f"Erreur lors de la récupération des informations depuis Docker Hub: {str(e)}")
             return None
         except Exception as e:
             logger.error(f"Erreur lors de la récupération de la dernière version: {str(e)}")
             return None
+            
+    def _parse_version_for_sorting(self, version_str):
+        """
+        Parse une chaîne de version pour le tri.
+        Convertit chaque partie numérique en entier pour un tri correct.
+        
+        Args:
+            version_str (str): Chaîne de version à parser
+            
+        Returns:
+            tuple: Tuple de composants de version pour le tri
+        """
+        try:
+            # Supprimer le 'v' au début si présent
+            if version_str.startswith('v'):
+                version_str = version_str[1:]
+                
+            # Séparer la partie principale de la version des suffixes
+            if '-' in version_str:
+                main_version, suffix = version_str.split('-', 1)
+            else:
+                main_version, suffix = version_str, ''
+                
+            # Diviser la version en composants
+            components = []
+            for part in main_version.split('.'):
+                try:
+                    components.append(int(part))
+                except ValueError:
+                    components.append(part)
+                    
+            # Ajouter le suffixe comme dernier élément
+            if suffix:
+                components.append(suffix)
+                
+            return tuple(components)
+        except Exception:
+            # En cas d'erreur, retourner une valeur qui sera classée en dernier
+            return (-1,)
     
     def is_valid_version(self, version_str):
         """
