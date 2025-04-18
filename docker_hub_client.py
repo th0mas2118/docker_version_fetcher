@@ -7,7 +7,16 @@ import requests
 import logging
 import json
 import time
+import re
 from urllib.parse import quote_plus
+
+# Utiliser packaging.version pour une meilleure comparaison des versions
+try:
+    from packaging import version
+    HAS_PACKAGING = True
+except ImportError:
+    HAS_PACKAGING = False
+    logging.warning("Le module 'packaging' n'est pas installé. La comparaison des versions sera moins précise.")
 
 logger = logging.getLogger('docker_version_fetcher.docker_hub_client')
 
@@ -189,6 +198,39 @@ class DockerHubClient:
             logger.error(f"Erreur lors de la récupération de la dernière version: {str(e)}")
             return None
     
+    def is_valid_version(self, version_str):
+        """
+        Vérifie si une chaîne est une version valide.
+        
+        Args:
+            version_str (str): Chaîne de version à vérifier
+            
+        Returns:
+            bool: True si la version est valide, False sinon
+        """
+        # Ignorer les versions qui ne sont pas des versions sémantiques ou numériques
+        if version_str in ['latest', 'stable', 'master', 'main', 'sts', 'beta']:
+            return False
+            
+        # Vérifier si la version contient au moins un chiffre
+        if not any(c.isdigit() for c in version_str):
+            return False
+            
+        # Vérifier les formats de version courants
+        version_patterns = [
+            r'^\d+\.\d+\.\d+$',  # 1.2.3
+            r'^\d+\.\d+$',       # 1.2
+            r'^v\d+\.\d+\.\d+$', # v1.2.3
+            r'^\d+\.\d+\.\d+-[a-zA-Z0-9]+$'  # 1.2.3-alpha1
+        ]
+        
+        for pattern in version_patterns:
+            if re.match(pattern, version_str):
+                return True
+                
+        # Si aucun pattern ne correspond mais qu'il y a des chiffres, c'est peut-être une version valide
+        return True
+    
     def _compare_versions(self, version1, version2):
         """
         Compare deux versions sémantiques.
@@ -200,9 +242,35 @@ class DockerHubClient:
         Returns:
             int: 1 si version1 > version2, -1 si version1 < version2, 0 si égales
         """
+        # Si les versions sont identiques, elles sont égales
+        if version1 == version2:
+            return 0
+            
+        # Vérifier si les versions sont valides
+        if not self.is_valid_version(version1) or not self.is_valid_version(version2):
+            logger.warning(f"Comparaison de versions non valides: {version1} et {version2}")
+            return 0  # Considérer comme égales si l'une des versions n'est pas valide
+        
         try:
+            # Utiliser packaging.version si disponible (meilleure gestion des versions sémantiques)
+            if HAS_PACKAGING:
+                # Supprimer le 'v' au début si présent
+                v1 = version1[1:] if version1.startswith('v') else version1
+                v2 = version2[1:] if version2.startswith('v') else version2
+                
+                # Comparer avec packaging.version
+                parsed_v1 = version.parse(v1)
+                parsed_v2 = version.parse(v2)
+                
+                if parsed_v1 > parsed_v2:
+                    return 1
+                elif parsed_v1 < parsed_v2:
+                    return -1
+                else:
+                    return 0
+            
+            # Méthode de secours si packaging n'est pas disponible
             # Gérer les versions avec des parties non numériques
-            # D'abord, essayer de comparer les versions sémantiques standard (x.y.z)
             v1_parts = version1.split('.')
             v2_parts = version2.split('.')
             
@@ -245,9 +313,4 @@ class DockerHubClient:
             return 0
         except Exception as e:
             logger.warning(f"Erreur lors de la comparaison des versions {version1} et {version2}: {str(e)}")
-            # En cas d'erreur, comparer lexicographiquement
-            if version1 > version2:
-                return 1
-            elif version1 < version2:
-                return -1
-            return 0
+            return 0  # En cas d'erreur, considérer comme égales
