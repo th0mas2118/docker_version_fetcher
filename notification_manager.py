@@ -130,12 +130,43 @@ class NotificationManager:
             # Construire le message
             message = f"**Mises à jour Docker détectées le {datetime.now().strftime('%Y-%m-%d à %H:%M')}**\n\n"
             
+            # Regrouper les mises à jour par repository
+            repo_updates = {}
             for update in updates:
-                message += f"📦 **{update['repository']}**\n"
-                message += f"  • Version actuelle: {update['current_tag']}\n"
-                message += f"  • Nouvelle version: {update['latest_tag']}\n\n"
+                repo = update['repository']
+                if repo not in repo_updates:
+                    repo_updates[repo] = []
+                repo_updates[repo].append(update)
             
-            message += "Pour mettre à jour, utilisez `docker pull [image]:[tag]`"
+            # Formater le message par repository
+            for repo, repo_updates_list in repo_updates.items():
+                message += f"📦 **{repo}**\n"
+                
+                # Trouver la version la plus récente disponible pour ce repository
+                latest_version = None
+                for update in repo_updates_list:
+                    if not latest_version or update['latest_tag'] > latest_version:
+                        latest_version = update['latest_tag']
+                
+                # Lister toutes les versions actuelles qui doivent être mises à jour
+                current_versions = [update['current_tag'] for update in repo_updates_list]
+                current_versions.sort()
+                
+                if len(current_versions) > 1:
+                    message += f"  • Versions actuelles: {', '.join(current_versions)}\n"
+                else:
+                    message += f"  • Version actuelle: {current_versions[0]}\n"
+                    
+                message += f"  • Nouvelle version disponible: {latest_version}\n"
+                
+                # Ajouter le nom du conteneur si disponible
+                containers = [update.get('container_name', '') for update in repo_updates_list if 'container_name' in update]
+                if containers and all(containers):
+                    message += f"  • Conteneurs concernés: {', '.join(containers)}\n"
+                
+                message += "\n"
+            
+            message += "Pour mettre à jour, utilisez `docker pull [image]:[tag]` ou mettez à jour via Portainer."
             
             # Envoyer la notification
             return self.send_notification(title, message, priority=self.config.get('priority', 5))

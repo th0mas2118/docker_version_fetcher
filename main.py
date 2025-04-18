@@ -45,24 +45,37 @@ def main():
         # Chargement de l'état précédent
         state = state_manager.load_state()
         
-        # Récupération des images locales
-        logger.info("Récupération des images Docker locales...")
-        local_images = scanner.get_local_images()
-        logger.info(f"Trouvé {len(local_images)} images locales")
+        # Récupération des conteneurs en cours d'exécution
+        logger.info("Récupération des conteneurs Docker en cours d'exécution...")
+        running_containers = scanner.get_running_containers()
+        logger.info(f"Trouvé {len(running_containers)} conteneurs en cours d'exécution")
         
-        # Regrouper les images par repository pour détecter les versions inférieures
-        repo_versions = {}
-        for image in local_images:
+        # Récupération des images utilisées par les conteneurs
+        logger.info("Récupération des images Docker utilisées par les conteneurs...")
+        container_images = []
+        for container in running_containers:
             # Ignorer l'image du projet elle-même
-            if "docker_version_fetcher" in image['repository']:
-                logger.info(f"Image du projet ignorée: {image['repository']}:{image['tag']}")
+            if "docker_version_fetcher" in container['repository']:
+                logger.info(f"Image du projet ignorée: {container['repository']}:{container['tag']}")
                 continue
                 
             # Ignorer les mises à jour pour les tags 'latest'
-            if image['tag'] == 'latest':
-                logger.info(f"Tag 'latest' ignoré pour les mises à jour: {image['repository']}:{image['tag']}")
+            if container['tag'] == 'latest':
+                logger.info(f"Tag 'latest' ignoré pour les mises à jour: {container['repository']}:{container['tag']}")
                 continue
-            
+                
+            container_images.append({
+                'repository': container['repository'],
+                'tag': container['tag'],
+                'digest': container['image_id'],
+                'container_name': container['name']
+            })
+        
+        logger.info(f"Trouvé {len(container_images)} images utilisées par des conteneurs")
+        
+        # Regrouper les images par repository pour détecter les versions inférieures
+        repo_versions = {}
+        for image in container_images:
             # Ajouter l'image au dictionnaire groupé par repository
             if image['repository'] not in repo_versions:
                 repo_versions[image['repository']] = []
