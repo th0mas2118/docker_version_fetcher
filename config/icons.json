@@ -1,0 +1,19 @@
+{
+  "grafana": "📈",
+  "postgres": "💾",
+  "mysql": "💾",
+  "mariadb": "💾",
+  "mongo": "💾",
+  "redis": "🔥",
+  "nginx": "🛬",
+  "apache": "🛬",
+  "node": "👾",
+  "python": "🐍",
+  "php": "🌏",
+  "wordpress": "📝",
+  "gitlab": "🐱",
+  "jenkins": "👷",
+  "traefik": "🚀",
+  "portainer": "💡",
+  "default": "📦"
+}
