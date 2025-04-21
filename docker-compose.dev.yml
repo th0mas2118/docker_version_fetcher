@@ -8,7 +8,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./package.json:/app/package.json
-      - ./data:/app/data
+      - ${DATA_PATH:-./data}:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - GOTIFY_URL=${GOTIFY_URL}

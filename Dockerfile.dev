@@ -8,6 +8,9 @@ COPY package*.json ./
 # Installer les dépendances
 RUN bun install
 
+# Créer le dossier data avec les bonnes permissions
+RUN mkdir -p /app/data && chmod 777 /app/data
+
 # Les fichiers source seront montés en volume
 # Pas besoin de copier le code source
 
