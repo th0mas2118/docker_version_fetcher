@@ -1,6 +1,6 @@
 services:
   docker-version-fetcher:
-    image: ${IMAGE_VERSION:-ghcr.io/username/docker-version-fetcher:latest}
+    image: ${IMAGE_VERSION:-ghcr.io/th0mas2118/docker_version_fetcher:0.1.0}
     container_name: docker-version-fetcher
     restart: unless-stopped
     volumes:
