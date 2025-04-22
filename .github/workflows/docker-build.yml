@@ -3,11 +3,9 @@ name: Build and Push Docker Image
 # Définit quand ce workflow sera déclenché
 on:
   push:
-    branches:
-      - main
-      - master
+    # Se déclenche uniquement pour les tags
     tags:
-      - '*'  # Se déclenche pour tous les tags
+      - '*'
 
 jobs:
   build-and-push:
