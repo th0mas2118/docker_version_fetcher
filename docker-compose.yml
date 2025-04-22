@@ -12,6 +12,7 @@ services:
       - GOTIFY_TOKEN=${GOTIFY_TOKEN}
       - GOTIFY_PRIORITY=${GOTIFY_PRIORITY:-5}
       - GOTIFY_TITLE=${GOTIFY_TITLE:-Docker Version Fetcher}
+      - SERVER_NAME=${SERVER_NAME:-Serveur Principal}
       - CHECK_INTERVAL=${CHECK_INTERVAL:-0 0 */24 * * *}
       - NOTIFICATION_FREQUENCY=${NOTIFICATION_FREQUENCY:-4}
     networks:

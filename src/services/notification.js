@@ -8,6 +8,7 @@ class NotificationService {
     this.gotifyToken = process.env.GOTIFY_TOKEN;
     this.gotifyPriority = process.env.GOTIFY_PRIORITY;
     this.gotifyTitle = process.env.GOTIFY_TITLE;
+    this.serverName = process.env.SERVER_NAME || 'Serveur Principal';
     
     // Chargement des icônes personnalisées depuis le fichier de configuration
     this.containerIcons = this.loadIcons();
@@ -144,7 +145,7 @@ class NotificationService {
    */
   async notifySingleUpdate(update) {
     const message = this.createSingleUpdateMessage(update);
-    const title = `Mise à jour disponible pour ${update.containerName}`;
+    const title = `[${this.serverName}] Mise à jour disponible pour ${update.containerName}`;
     await this.sendNotification(message, title);
   }
   
@@ -157,8 +158,8 @@ class NotificationService {
     
     const message = this.createMultiUpdateMessage(updates);
     const title = updates.length === 1 
-      ? `Mise à jour disponible pour ${updates[0].containerName}` 
-      : `${updates.length} mises à jour disponibles`;
+      ? `[${this.serverName}] Mise à jour disponible pour ${updates[0].containerName}` 
+      : `[${this.serverName}] ${updates.length} mises à jour disponibles`;
     
     console.log(`Envoi d'une notification pour ${updates.length} mise(s) à jour`);
     await this.sendNotification(message, title);
