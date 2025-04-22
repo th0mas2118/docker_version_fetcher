@@ -32,7 +32,7 @@ COPY --from=builder /app/package.json /app/
 RUN bun install --production
 
 # Créer le répertoire de données et définir les permissions
-RUN mkdir -p /app/data && chown -R appuser:appgroup /app
+RUN mkdir -p /app/data && chown -R appuser:dockergroup /app
 
 # Utiliser l'utilisateur non-root
 USER appuser
