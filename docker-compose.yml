@@ -7,6 +7,9 @@ services:
     volumes:
       - ${DATA_PATH:-./data}:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    # S'assurer que le conteneur a les droits d'écriture sur le dossier data
+    # Cela exécute une commande au démarrage du conteneur pour définir les bonnes permissions
+    entrypoint: ["/bin/sh", "-c", "mkdir -p /app/data && chmod 777 /app/data && bun index.js"]
     environment:
       - GOTIFY_URL=${GOTIFY_URL}
       - GOTIFY_TOKEN=${GOTIFY_TOKEN}
