@@ -28,6 +28,9 @@ RUN groupadd -r -g 996 dockergroup && \
 COPY --from=builder /app/dist /app
 COPY --from=builder /app/package.json /app/
 
+# Copier les fichiers de configuration
+COPY --from=builder /app/config /app/config
+
 # Installer uniquement les dépendances de production
 RUN bun install --production
 
