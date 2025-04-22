@@ -3,6 +3,7 @@ services:
     image: ghcr.io/th0mas2118/docker_version_fetcher:${IMAGE_VERSION:-latest}
     container_name: docker-version-fetcher
     restart: unless-stopped
+    user: "appuser"
     volumes:
       - ${DATA_PATH:-./data}:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro

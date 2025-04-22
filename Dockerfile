@@ -19,8 +19,10 @@ FROM oven/bun:1-slim
 
 WORKDIR /app
 
-# Créer un utilisateur non-root
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+# Créer un utilisateur non-root avec accès au socket Docker
+# Le groupe 996 correspond au groupe docker sur l'hôte
+RUN groupadd -r -g 996 dockergroup && \
+    useradd -r -g dockergroup -G dockergroup appuser
 
 # Copier uniquement les fichiers nécessaires de l'étape de construction
 COPY --from=builder /app/dist /app
